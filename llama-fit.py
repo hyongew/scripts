@@ -74,7 +74,7 @@ DATASETS_DIR_ENV = "DATASETS_DIR"
 SPEED_BENCH_TIMEOUT_SECONDS = 1800
 SPEED_BENCH_REQUEST_TIMEOUT_SECONDS = 600
 SPEED_BENCH_SPLIT = "throughput_2k"
-SPEED_BENCH_INPUT_TOKENS = 32768
+SPEED_BENCH_INPUT_TOKENS = 8192 # 16384 32768
 GGUF_MAGIC = b"GGUF"
 
 # GGUF scalar types. Strings and arrays are handled separately.
@@ -122,7 +122,7 @@ class Metadata:
 class Selection:
     server: Path | None
     bench: Path | None
-    fit_params: Path
+    fit_params: Path | None
     model: Path
     mmproj: Path | None
     draft: Path | None
@@ -732,7 +732,7 @@ def benchmark_command(selection: Selection, gpus: list[GPU], help_text: str,
                       metadata: Metadata) -> list[str]:
     require_options(help_text, ["-m", "-p", "-n", "-b", "-ub", "-r", "-o"])
     command = [str(selection.bench), "-m", str(selection.model), "-p", str(BENCH_PROMPT),
-               "-n", str(BENCH_GENERATION), "-b", "1024,2048", "-ub", "256,512",
+               "-n", str(BENCH_GENERATION), "-b", "1024,2048", "-ub", "128,256,512",
                "-r", str(BENCH_REPETITIONS), "-o", "json"]
     for flag, value in (("-ctk", selection.cache_k), ("-ctv", selection.cache_v)):
         if option(help_text, flag):
@@ -832,6 +832,8 @@ def fitted_args_keep_dense_on_gpu(output: str, metadata: Metadata) -> bool:
 
 def run_fit_params(selection: Selection, gpus: list[GPU],
                    metadata: Metadata) -> int | None:
+    if selection.fit_params is None:
+        raise FitError("llama-fit-params was not configured.")
     help_text = run_text([str(selection.fit_params), "--help"])
     require_options(help_text, ["-m", "-c"])
     base_command = [str(selection.fit_params), "-m", str(selection.model)]
@@ -951,8 +953,8 @@ def server_command(selection: Selection, gpus: list[GPU], help_text: str,
             elif "draft-mtp" not in spec_types:
                 raise FitError("A draft speculative type was requested but no draft GGUF or embedded MTP was supplied.")
             if "draft-mtp" in spec_types:
-                for flag, value in (
-                                    ("--spec-draft-n-max", "3"),
+                for flag, value in (("--spec-draft-n-max", "3"),
+                                    # ('--spec-draft-p-min', '0.4')
                                     ):
                     supported = option(help_text, flag)
                     if supported:
@@ -1745,6 +1747,7 @@ def main() -> int:
                                 ("q4_0", "q4_0"))[int(choice) - 1]
             break
     automatic = ask_yes_no("Automatically run full script?", True)
+    run_fitter = automatic or ask_yes_no("\nRun llama-fit-params to find a fitting context?", True)
     cache_ram = DEFAULT_CACHE_RAM_GIB
     bandwidth_estimate = runtime_bandwidth_gbps(gpus)
     if bandwidth_estimate is not None:
@@ -1767,8 +1770,8 @@ def main() -> int:
         else:
             draft_spec_type = choose_draft_spec_type(automatic)
     server = find_tool("llama-server", prompt=not args.skip_probe and not automatic)
-    fit_params = find_tool("llama-fit-params", prompt=not automatic)
-    if fit_params is None:
+    fit_params = find_tool("llama-fit-params", prompt=True) if run_fitter else None
+    if run_fitter and fit_params is None:
         raise FitError("llama-fit-params is required. Put it on PATH or provide its path.")
     selection = Selection(server, None, fit_params, model, mmproj, draft, draft_spec_type,
                           cache_k, cache_v, cache_ram, not args.skip_probe,
@@ -1787,10 +1790,19 @@ def main() -> int:
     print_plan(selection, metadata, gpus, plan)
     if not plan["fits_policy"]:
         return 2
-    fitted_context = run_fit_params(selection, gpus, metadata)
-    if fitted_context is None:
-        raise FitError("llama-fit-params could not find a viable context from FIT_CONTEXTS.")
-    context = fitted_context
+    if run_fitter:
+        fitted_context = run_fit_params(selection, gpus, metadata)
+        if fitted_context is None:
+            raise FitError("llama-fit-params could not find a viable context from FIT_CONTEXTS.")
+        context = fitted_context
+    else:
+        supported_contexts = [candidate for candidate in FIT_CONTEXTS
+                              if metadata.context_length is None
+                              or candidate <= metadata.context_length]
+        if not supported_contexts:
+            raise FitError("The model does not declare a usable context from FIT_CONTEXTS.")
+        context = max(supported_contexts)
+        print(f"\nSkipping llama-fit-params; starting with model-supported context candidate: {context}")
     draft_fit_context: int | None = None
     if (selection.draft or selection.embedded_mtp) and context >= 1024:
         draft_context = next_lower_fit_context(context, metadata.context_length)
@@ -1801,7 +1813,8 @@ def main() -> int:
     if selection.verify_server and server is not None and context >= 1024:
         context_note = (f" (one fit step below {draft_fit_context} to reserve VRAM for speculative decoding)"
                         if draft_fit_context is not None else "")
-        print(f"\nFitted context limit: {context}{context_note}")
+        context_label = "Fitted context limit" if run_fitter else "Starting context candidate"
+        print(f"\n{context_label}: {context}{context_note}")
         if automatic or ask_yes_no("Verify with a real load?", True):
             probe_result, context = probe_with_context_retries(
                 selection, gpus, metadata, context,
@@ -1834,7 +1847,7 @@ def main() -> int:
     if args.server_url and args.prompt_file:
         real_workload(args.server_url, args.prompt_file)
     if context < 1024:
-        raise FitError("llama-fit-params returned no usable context.")
+        raise FitError("No usable context was selected.")
     print_config(selection, gpus, metadata, context, batch, bench_rows, probe_result)
     return 0
 

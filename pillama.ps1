@@ -41,17 +41,42 @@ $common = @('--jinja', '--flash-attn', 'on',
             '--port', "$port")
 
 $cfg = [ordered]@{
-    'qwen3.8-27b' = @{   # in chat - <|think_off|>, <|think_low|>, <|think_medium|>, <|think_xhigh|>
+    'qwen3.8-27b_q4' = @{   # mtp 110k, no-mtp 183k
         Desc = '27b dense'
         File = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
+        # EmbeddedMtp = $true
         # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
-        Args = @('--ctx-size', '163840', '--cache-type-k', 'f16', '--cache-type-v', 'f16',
+        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
                  '--ubatch-size', '256',
+                 '--gpu-layers', '999',
                  '--chat-template-file', "$modelsDir\chat_templates\chat_template_qwen.jinja",
                  '--reasoning-format', 'deepseek',   # needed for froggeric chat template
                  '--spec-type', 'draft-mtp,ngram-mod', '--model-draft', '{draft}',
                  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
-                 '--spec-draft-p-min', '0.8',
+                 '--spec-ngram-mod-n-match', '24',
+                 '--spec-ngram-mod-n-min', '48',
+                 '--spec-ngram-mod-n-max', '64',
+                # --- thinking mode ---
+                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0.0',
+                 '--presence-penalty', '0.0', '--repeat-penalty', '1.0',
+                 '--reasoning-effort', 'xhigh',
+                # --- non-thinking mode ---
+                #  '--temp', '0.7', '--top-p', '0.80', '--top-k', '20', '--min-p', '0.0',
+                #  '--presence-penalty', '1.5', '--repeat-penalty', '1.0',
+                #  '--reasoning-effort', 'off',
+                 '--reasoning-preserve')
+    }
+    'qwen3.8-27b_q6' = @{   # 185k
+        Desc = '27b dense'
+        File = 'Qwen3.8-27B-UD-Q6_K.gguf'
+        # EmbeddedMtp = $true
+        # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
+        Args = @('--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
+                 '--ubatch-size', '256',
+                 '--gpu-layers', '999',
+                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_qwen.jinja",
+                 '--reasoning-format', 'deepseek',   # needed for froggeric chat template
+                 '--spec-type', 'draft-mtp,ngram-mod',
                  '--spec-ngram-mod-n-match', '24',
                  '--spec-ngram-mod-n-min', '48',
                  '--spec-ngram-mod-n-max', '64',
@@ -78,46 +103,29 @@ $cfg = [ordered]@{
                 #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
                  '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
     }
-    'gemma-31b' = @{
+    'gemma-31b' = @{    # 90k
         Desc = '31b dense'
         File = 'Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf'
         # Draft = 'mtp-gemma-4-31B-it.gguf'
         # Mmproj = 'mmproj-Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf'
-        Args = @('--ctx-size', '65536', '--cache-type-k', 'f16', '--cache-type-v', 'f16',
+        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
+                 '--gpu-layers', '999',
                  '--mmproj', '{mmproj}', '--no-mmproj-offload',
                  '--chat-template-file', "$modelsDir\chat_templates\chat_template_gemma4.jinja",
                 #  '--spec-type', 'draft-mtp', '--model-draft', '{draft}',
                 #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
-                #  '--spec-draft-p-min', '0.8',
                  '--temp', '0.6', '--top-p', '0.9', '--top-k', '64', '--min-p', '0.05',
                  '--repeat-penalty', '1.1')
     }
-    'qwen3.8-27b-q6-kv8' = @{   # in chat - <|think_off|>, <|think_low|>, <|think_medium|>, <|think_xhigh|>
-        Desc = '27b dense, all GPU, Q8 KV'
-        File = 'Qwen3.8-27B-UD-Q6_K.gguf'
-        # EmbeddedMtp = $true
-        Args = @('--ctx-size', '131072', '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
-                 '--ubatch-size', '256',
-                 '--fit', 'off', '--gpu-layers', '999',
-                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_qwen.jinja",
-                 '--reasoning-format', 'deepseek',   # needed for froggeric chat template
-                 '--spec-type', 'draft-mtp,ngram-mod',
-                 '--spec-draft-n-max', '3',
-                 '--spec-draft-p-min', '0.8',
-                 '--spec-ngram-mod-n-match', '24',
-                 '--spec-ngram-mod-n-min', '48',
-                 '--spec-ngram-mod-n-max', '64',
-                # --- thinking mode ---
-                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0.0',
-                 '--presence-penalty', '0.0', '--repeat-penalty', '1.0',
-                 '--reasoning-effort', 'xhigh',
-                # --- non-thinking mode ---
-                #  '--temp', '0.7', '--top-p', '0.80', '--top-k', '20', '--min-p', '0.0',
-                #  '--presence-penalty', '1.5', '--repeat-penalty', '1.0',
-                #  '--reasoning-effort', 'off',
-                 '--reasoning-preserve')
+    'muse-glimmer-30b' = @{   # 131k
+        Desc = '30b dense'
+        File = 'Muse-Glimmer-30B-UD-Q5_K_M.gguf'
+        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
+                 '--gpu-layers', '999',
+                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_glimmer.jinja",
+                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
     }
-    'qwen3.8-flash-next' = @{   # in chat - <|think_off|>, <|think_low|>, <|think_medium|>, <|think_xhigh|>
+    'qwen3.8-flash-next' = @{   # run llama-fit-params to get --override-tensor value
         Desc = '125b a6b n51b'
         File = 'Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf'
         Args = @('--ctx-size', '131072', '--cache-type-k', 'f16', '--cache-type-v', 'f16',
@@ -140,13 +148,6 @@ $cfg = [ordered]@{
                 #  '--presence-penalty', '1.5', '--repeat-penalty', '1.0',
                 #  '--reasoning-effort', 'off',
                  '--reasoning-preserve')
-    }
-    'muse-glimmer-30b' = @{   # system prompt - "Reasoning strength: low / medium / (high) / xhigh"
-        Desc = '30b dense'
-        File = 'Muse-Glimmer-30B-UD-Q5_K_M.gguf'
-        Args = @('--ctx-size', '131072', '--cache-type-k', 'f16', '--cache-type-v', 'f16',
-                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_glimmer.jinja",
-                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
     }
 }
 
@@ -876,7 +877,8 @@ function Wait-ServerReady {
     if (-not $ready) {
         throw "server did not become healthy within $TimeoutSec seconds$detailHint"
     }
-    Write-Host ("  {0} ready in {1}:{2:d2}" -f $Label, [int]$el.TotalMinutes, $el.Seconds) -ForegroundColor Green
+    $elapsedSec = [int][Math]::Floor($el.TotalSeconds)
+    Write-Host ("  {0} ready in {1}:{2:d2}" -f $Label, [int][Math]::Floor($elapsedSec / 60), ($elapsedSec % 60)) -ForegroundColor Green
 }
 
 function Show-StartupMemorySummary {

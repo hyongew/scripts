@@ -8,14 +8,12 @@ set by the environment variable PILLAMA_MODELS_DIR.
 Flag names are not case-sensitive.
   pillama                       show a model menu
   pillama -silent               llama is served silently and stopped when pi exits
-  pillama -ramthreshold 4       warn if the host-RAM leaves under that many GiB free
 
 Ctx sizes: [65536, 98304, 131072, 163840, 196608, 228376, 262144]
 #>
 [CmdletBinding()]
 param(
-    [switch]$Silent,
-    [double]$RamThreshold = 16
+    [switch]$Silent
 )
 
 $port = 8080
@@ -24,6 +22,7 @@ $forceReplacePortOwner = $false
 $startupTimeoutSec = 600
 
 $vramReserve = @(0.125, 0.5)   # GiB of vram to reserve on GPU 0, and every other GPU
+$ramThreshold = 16      # Warns if the host-RAM leaves under that many GiB free
 
 # Controls how PowerShell reacts to errors that aren’t given their own -ErrorAction setting
 $ErrorActionPreference = 'Stop'
@@ -1026,7 +1025,7 @@ if ($loaded -and ($loaded -eq $modelId -or $loaded -like "*$modelId*")) {
         }
     }
 
-    Test-HostMemoryHeadroom -Paths @($gguf, $draft, $mmproj) -ReserveMib $fitTarget -KeepFreeGib $RamThreshold
+    Test-HostMemoryHeadroom -Paths @($gguf, $draft, $mmproj) -ReserveMib $fitTarget -KeepFreeGib $ramThreshold
 
     if (Test-LlamaFlag '--log-file') {
         $startupLogPath = (New-TemporaryFile).FullName
@@ -1049,7 +1048,7 @@ if ($loaded -and ($loaded -eq $modelId -or $loaded -like "*$modelId*")) {
         Wait-ServerReady -Proc $proc -TimeoutSec $startupTimeoutSec -Label $modelId
         $serverOwnerPid = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
                            Select-Object -First 1).OwningProcess
-        Show-StartupMemorySummary -LogPath $startupLogPath -FitTarget $fitTargetApplied -KeepFreeGib $RamThreshold
+        Show-StartupMemorySummary -LogPath $startupLogPath -FitTarget $fitTargetApplied -KeepFreeGib $ramThreshold
     } catch {
         if ($searxngStartedByUs) {
             Stop-Searxng

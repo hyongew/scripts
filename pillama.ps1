@@ -2,8 +2,8 @@
 Starts the llama.cpp server for a chosen model, waits until it is ready,
 then launches pi to connect to it.
 
-Model files are found recursively in the directory set by the environment variable
-PILLAMA_MODELS_DIR.
+Model files are found recursively in the directory or semicolon-separated directories
+set by the environment variable PILLAMA_MODELS_DIR.
 
 Flag names are not case-sensitive.
   pillama                       show a model menu
@@ -18,13 +18,6 @@ param(
     [double]$RamThreshold = 16
 )
 
-$modelsDir = $env:PILLAMA_MODELS_DIR
-if (-not $modelsDir) {
-    throw 'PILLAMA_MODELS_DIR not set'
-}
-if (-not (Test-Path -LiteralPath $modelsDir -PathType Container)) {
-    throw "Models directory not found: $modelsDir"
-}
 $port = 8080
 
 $forceReplacePortOwner = $false
@@ -44,12 +37,13 @@ $cfg = [ordered]@{
     'qwen3.8-27b_q4' = @{   # mtp 110k, no-mtp 183k
         Desc = '27b dense'
         File = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
+        ChatTemplate = 'chat_templates\chat_template_qwen.jinja'
         # EmbeddedMtp = $true
         # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
         Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
                  '--ubatch-size', '256',
                  '--gpu-layers', '999',
-                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_qwen.jinja",
+                 '--chat-template-file', '{chat-template}',
                  '--reasoning-format', 'deepseek',   # needed for froggeric chat template
                  '--spec-type', 'draft-mtp,ngram-mod', '--model-draft', '{draft}',
                  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
@@ -69,12 +63,13 @@ $cfg = [ordered]@{
     'qwen3.8-27b_q6' = @{   # 185k
         Desc = '27b dense'
         File = 'Qwen3.8-27B-UD-Q6_K.gguf'
+        ChatTemplate = 'chat_templates\chat_template_qwen.jinja'
         # EmbeddedMtp = $true
         # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
         Args = @('--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
                  '--ubatch-size', '256',
                  '--gpu-layers', '999',
-                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_qwen.jinja",
+                 '--chat-template-file', '{chat-template}',
                  '--reasoning-format', 'deepseek',   # needed for froggeric chat template
                  '--spec-type', 'draft-mtp,ngram-mod',
                  '--spec-ngram-mod-n-match', '24',
@@ -93,12 +88,13 @@ $cfg = [ordered]@{
     'gemma4-26b-a4b' = @{
         Desc = '26b MoE a4b'
         File = 'gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf'
+        ChatTemplate = 'chat_templates\chat_template_gemma4.jinja'
         # Draft = 'mtp-gemma-4-26B-A4B-it-Q4_0.gguf'
         Mmproj = 'mmproj-BF16.gguf'
         Args = @('--ctx-size', '262144', '--cache-type-k', 'f16', '--cache-type-v', 'f16',
                  '--batch-size', '1024', '--ubatch-size', '512', # change to 256 if OOM
                  '--mmproj', '{mmproj}', '--no-mmproj-offload',
-                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_gemma4.jinja",
+                 '--chat-template-file', '{chat-template}',
                 #  '--spec-type', 'draft-mtp', '--model-draft', '{draft}',
                 #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
                  '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
@@ -106,12 +102,13 @@ $cfg = [ordered]@{
     'gemma-31b' = @{    # 90k
         Desc = '31b dense'
         File = 'Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf'
+        ChatTemplate = 'chat_templates\chat_template_gemma4.jinja'
         # Draft = 'mtp-gemma-4-31B-it.gguf'
         # Mmproj = 'mmproj-Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf'
         Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
                  '--gpu-layers', '999',
                  '--mmproj', '{mmproj}', '--no-mmproj-offload',
-                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_gemma4.jinja",
+                 '--chat-template-file', '{chat-template}',
                 #  '--spec-type', 'draft-mtp', '--model-draft', '{draft}',
                 #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
                  '--temp', '0.6', '--top-p', '0.9', '--top-k', '64', '--min-p', '0.05',
@@ -120,9 +117,10 @@ $cfg = [ordered]@{
     'muse-glimmer-30b' = @{   # 131k
         Desc = '30b dense'
         File = 'Muse-Glimmer-30B-UD-Q5_K_M.gguf'
+        ChatTemplate = 'chat_templates\chat_template_glimmer.jinja'
         Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
                  '--gpu-layers', '999',
-                 '--chat-template-file', "$modelsDir\chat_templates\chat_template_glimmer.jinja",
+                 '--chat-template-file', '{chat-template}',
                  '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
     }
     'qwen3.8-flash-next' = @{   # run llama-fit-params to get --override-tensor value
@@ -153,13 +151,50 @@ $cfg = [ordered]@{
 
 # ---------------------------------------------------------------- model files
 
-# Find a file recursively anywhere under $modelsDir.
+$modelsDirValue = $env:PILLAMA_MODELS_DIR
+if (-not $modelsDirValue) {
+    throw 'PILLAMA_MODELS_DIR not set'
+}
+
+$modelsDirs = @($modelsDirValue -split [regex]::Escape([IO.Path]::PathSeparator) |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ })
+if (-not $modelsDirs.Count) {
+    throw 'PILLAMA_MODELS_DIR does not contain any directories'
+}
+
+$missingModelsDirs = @($modelsDirs | Where-Object {
+    -not (Test-Path -LiteralPath $_ -PathType Container)
+})
+if ($missingModelsDirs.Count) {
+    throw "Models directory not found: $($missingModelsDirs -join '; ')"
+}
+$modelsDirs = @($modelsDirs | ForEach-Object { (Get-Item -LiteralPath $_).FullName } | Select-Object -Unique)
+$modelsDir = $modelsDirs[0]   # Retained for paths/configs that use one root directly.
+$modelsDirsLabel = $modelsDirs -join '; '
+
+function Resolve-ConfiguredPath {
+    param([Parameter(Mandatory)][string]$RelativePath)
+
+    foreach ($root in $modelsDirs) {
+        $candidate = Join-Path -Path $root -ChildPath $RelativePath
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Get-Item -LiteralPath $candidate).FullName
+        }
+    }
+
+    return (Join-Path -Path $modelsDir -ChildPath $RelativePath)
+}
+
+# Find a file recursively anywhere under the configured model roots.
 $script:fileIndex = $null
 function Resolve-ModelFile {
     param([Parameter(Mandatory)][string]$Name, [string]$What = 'model file')
 
     if ($null -eq $script:fileIndex) {
-        $script:fileIndex = @(Get-ChildItem -LiteralPath $modelsDir -Recurse -File -ErrorAction SilentlyContinue)
+        $script:fileIndex = @($modelsDirs | ForEach-Object {
+            Get-ChildItem -LiteralPath $_ -Recurse -File -ErrorAction SilentlyContinue
+        })
     }
 
     $hits = @($script:fileIndex | Where-Object { $_.Name -ieq $Name })
@@ -168,7 +203,7 @@ function Resolve-ModelFile {
         $stem = [IO.Path]::GetFileNameWithoutExtension($Name)
         $near = @($script:fileIndex | Where-Object { $_.Name -like "$stem*" } | Select-Object -First 5)
         $hint = if ($near) { "`n  near matches:`n    " + (($near | ForEach-Object { $_.FullName }) -join "`n    ") } else { '' }
-        throw "$What '$Name' not found under $modelsDir$hint"
+        throw "$What '$Name' not found under $modelsDirsLabel$hint"
     }
     if ($hits.Count -gt 1) {
         Write-Host "  note: $($hits.Count) copies of $Name found, using $($hits[0].FullName)" -ForegroundColor DarkYellow
@@ -182,6 +217,7 @@ function Build-ArgPlaceholders {
         [string[]]$Arguments,
         [string]$DraftPath,
         [string]$MmprojPath,
+        [string]$ChatTemplatePath,
         [switch]$EmbeddedMtp
     )
 
@@ -217,6 +253,7 @@ function Build-ArgPlaceholders {
 
         $v = $a
         if ($v -match '\{draft\}') { $v = $v -replace '\{draft\}', $DraftPath }
+        if ($v -eq '{chat-template}') { $v = $ChatTemplatePath }
         if ($v -match '\{mmproj\}') {
             if (-not $MmprojPath) {
                 # Remove flag-value pair if no path (--mmproj {mmproj})
@@ -638,13 +675,26 @@ foreach ($name in $cfg.Keys) {
     }
 
     if (-not $errors.Count) {
+        if ($entry.Contains('ChatTemplate') -and $entry.ChatTemplate) {
+            $templatePath = Resolve-ConfiguredPath -RelativePath $entry.ChatTemplate
+            if (Test-Path -LiteralPath $templatePath -PathType Leaf) {
+                $paths.ChatTemplate = $templatePath
+            } else {
+                $errors += "chat template not found: $($entry.ChatTemplate) under $modelsDirsLabel"
+            }
+        }
+
         $templateFlag = [Array]::IndexOf([object[]]@($entry.Args), '--chat-template-file')
         if ($templateFlag -ge 0) {
             if ($templateFlag + 1 -ge @($entry.Args).Count) {
                 $errors += '--chat-template-file has no path'
             } else {
                 $templatePath = @($entry.Args)[$templateFlag + 1]
-                if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
+                if ($templatePath -eq '{chat-template}') {
+                    if (-not $paths.ContainsKey('ChatTemplate')) {
+                        $errors += '--chat-template-file has no resolvable ChatTemplate'
+                    }
+                } elseif (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
                     $errors += "chat template not found: $templatePath"
                 }
             }
@@ -809,7 +859,8 @@ $draft = $configStatus[$Model].Paths.Draft
 $mmproj = $configStatus[$Model].Paths.Mmproj
 
 $embeddedMtp = if ($c.Contains('EmbeddedMtp')) { [bool]$c.EmbeddedMtp } else { $false }
-$modelArgs = Build-ArgPlaceholders -Arguments $c.Args -DraftPath $draft -MmprojPath $mmproj -EmbeddedMtp:$embeddedMtp
+$modelArgs = Build-ArgPlaceholders -Arguments $c.Args -DraftPath $draft -MmprojPath $mmproj `
+             -ChatTemplatePath $configStatus[$Model].Paths.ChatTemplate -EmbeddedMtp:$embeddedMtp
 
 # ------------------------------------------------------------------ server I/O
 

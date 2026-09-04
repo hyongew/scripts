@@ -575,7 +575,6 @@ function Update-PiModelConfig {
             name = $Description
             input = $inputTypes
             contextWindow = $ContextWindow
-            maxTokens = 131072
             reasoning = $true
             cost = [ordered]@{ input = 0; output = 0; cacheRead = 0; cacheWrite = 0 }
         }

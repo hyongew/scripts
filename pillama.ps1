@@ -84,68 +84,6 @@ $cfg = [ordered]@{
                 #  '--reasoning-effort', 'off',
                  '--reasoning-preserve')
     }
-    'gemma4-26b-a4b' = @{
-        Desc = '26b MoE a4b'
-        File = 'gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf'
-        ChatTemplate = 'chat_templates\chat_template_gemma4.jinja'
-        # Draft = 'mtp-gemma-4-26B-A4B-it-Q4_0.gguf'
-        Mmproj = 'mmproj-BF16.gguf'
-        Args = @('--ctx-size', '262144', '--cache-type-k', 'f16', '--cache-type-v', 'f16',
-                 '--batch-size', '1024', '--ubatch-size', '512', # change to 256 if OOM
-                 '--mmproj', '{mmproj}', '--no-mmproj-offload',
-                 '--chat-template-file', '{chat-template}',
-                #  '--spec-type', 'draft-mtp', '--model-draft', '{draft}',
-                #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
-                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
-    }
-    'gemma-31b' = @{    # 90k
-        Desc = '31b dense'
-        File = 'Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf'
-        ChatTemplate = 'chat_templates\chat_template_gemma4.jinja'
-        # Draft = 'mtp-gemma-4-31B-it.gguf'
-        # Mmproj = 'mmproj-Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf'
-        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
-                 '--gpu-layers', '999',
-                 '--mmproj', '{mmproj}', '--no-mmproj-offload',
-                 '--chat-template-file', '{chat-template}',
-                #  '--spec-type', 'draft-mtp', '--model-draft', '{draft}',
-                #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
-                 '--temp', '0.6', '--top-p', '0.9', '--top-k', '64', '--min-p', '0.05',
-                 '--repeat-penalty', '1.1')
-    }
-    'muse-glimmer-30b' = @{   # 131k
-        Desc = '30b dense'
-        File = 'Muse-Glimmer-30B-UD-Q5_K_M.gguf'
-        ChatTemplate = 'chat_templates\chat_template_glimmer.jinja'
-        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
-                 '--gpu-layers', '999',
-                 '--chat-template-file', '{chat-template}',
-                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
-    }
-    'qwen3.8-flash-next' = @{   # run llama-fit-params to get --override-tensor value
-        Desc = '125b a6b n51b'
-        File = 'Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf'
-        Args = @('--ctx-size', '131072', '--cache-type-k', 'f16', '--cache-type-v', 'f16',
-                #  '--ubatch-size', '256',
-                 '--lazy-mode', 'on', '--load-mode', 'mmap',
-                 '--fit', 'off', '--gpu-layers', '49', '--tensor-split', '9,40',
-                 '--override-tensor', 'blk\.8\.ffn_down.*=CUDA1,blk\.13\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.14\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.15\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.16\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.17\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.18\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.19\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.20\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.21\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.22\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.23\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.24\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.25\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.26\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.27\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.28\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.29\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.30\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.31\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.32\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.33\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.34\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.35\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.36\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.37\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.38\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.39\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.40\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.41\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.42\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.43\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.44\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.45\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.46\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.47\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU,blk\.48\.ffn_(up|down|gate_up|gate)_(ch|)exps=CPU',
-                #  '--chat-template-file', "$modelsDir\chat_templates\chat_template_qwen.jinja",
-                 '--reasoning-format', 'deepseek',   # needed for froggeric chat template
-                 '--spec-type', 'ngram-mod', # '--model-draft', '{draft}',
-                 '--spec-ngram-mod-n-match', '24',
-                 '--spec-ngram-mod-n-min', '48',
-                 '--spec-ngram-mod-n-max', '64',
-                # --- thinking mode ---
-                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0.0',
-                 '--presence-penalty', '0.0', '--repeat-penalty', '1.0',
-                 '--reasoning-effort', 'medium',
-                # --- non-thinking mode ---
-                #  '--temp', '0.7', '--top-p', '0.80', '--top-k', '20', '--min-p', '0.0',
-                #  '--presence-penalty', '1.5', '--repeat-penalty', '1.0',
-                #  '--reasoning-effort', 'off',
-                 '--reasoning-preserve')
-    }
 }
 
 # ---------------------------------------------------------------- model files

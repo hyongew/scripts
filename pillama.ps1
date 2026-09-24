@@ -84,6 +84,45 @@ $cfg = [ordered]@{
                 #  '--reasoning-effort', 'off',
                  '--reasoning-preserve')
     }
+    'gemma4-31b' = @{    # 90k
+        Desc = '31b dense'
+        File = 'Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf'
+        ChatTemplate = 'chat_templates\chat_template_gemma.jinja'
+        # Draft = 'mtp-gemma-4-31B-it.gguf'
+        Mmproj = 'mmproj-Gemma4-31B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf'
+        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
+                 '--gpu-layers', '999',
+                 '--mmproj', '{mmproj}', '--no-mmproj-offload',
+                 '--chat-template-file', '{chat-template}',
+                #  '--spec-type', 'draft-mtp', '--model-draft', '{draft}',
+                #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
+                 '--temp', '0.6', '--top-p', '0.9', '--top-k', '64', '--min-p', '0.05',
+                 '--repeat-penalty', '1.1')
+    }
+    'gemma4-26b-a4b' = @{
+        Desc = '26b a4b MoE'
+        File = 'gemma-4-26B-A4B-it-UD-IQ4_NL.gguf'
+        ChatTemplate = 'chat_templates\chat_template_gemma.jinja'
+        # Draft = 'mtp-gemma-4-31B-it.gguf'
+        Mmproj = 'mmproj-F16.gguf'
+        Args = @('--ctx-size', '131072',
+                 '--cache-type-k', 'f16', '--cache-type-v', 'f16',
+                 '--mmproj', '{mmproj}', '--no-mmproj-offload',
+                 '--chat-template-file', '{chat-template}',
+                #  '--spec-type', 'draft-mtp', '--model-draft', '{draft}',
+                #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
+                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
+    }
+    'lfm2.5-2.6b' = @{
+        Desc = '2.6b dense'
+        File = 'LFM2.5-2.6B-Q8_0.gguf'
+        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
+                 '--gpu-layers', '999',
+                 '--mmproj', '{mmproj}', '--no-mmproj-offload',
+                 '--chat-template-file', '{chat-template}',
+                 '--temp', '0.1', '--top-k', '50',
+                 '--repeat-penalty', '1.1')
+    }
 }
 
 # ---------------------------------------------------------------- model files
@@ -103,10 +142,16 @@ if (-not $modelsDirs.Count) {
 $missingModelsDirs = @($modelsDirs | Where-Object {
     -not (Test-Path -LiteralPath $_ -PathType Container)
 })
-if ($missingModelsDirs.Count) {
-    throw "Models directory not found: $($missingModelsDirs -join '; ')"
+foreach ($missingDir in $missingModelsDirs) {
+    Write-Warning "Models directory not found, omitting: $missingDir"
 }
-$modelsDirs = @($modelsDirs | ForEach-Object { (Get-Item -LiteralPath $_).FullName } | Select-Object -Unique)
+$modelsDirs = @($modelsDirs |
+                Where-Object { Test-Path -LiteralPath $_ -PathType Container } |
+                ForEach-Object { (Get-Item -LiteralPath $_).FullName } |
+                Select-Object -Unique)
+if (-not $modelsDirs.Count) {
+    throw 'No models directories found in PILLAMA_MODELS_DIR: ' + $modelsDirValue
+}
 $modelsDir = $modelsDirs[0]   # Retained for paths/configs that use one root directly.
 $modelsDirsLabel = $modelsDirs -join '; '
 
@@ -171,6 +216,23 @@ function Build-ArgPlaceholders {
         # Remove external-drafter flag-value pairs if no draft path is found;
         # embedded MTP profiles retain their native draft flags.
         if ($dropValue) { $dropValue = $false; continue }
+
+        # A chat template is optional. Drop its flag and value together when
+        # neither the configured placeholder nor a literal path can be resolved.
+        if ($a -eq '--chat-template-file') {
+            if ($i + 1 -ge $Arguments.Count) { continue }
+            $i++
+            $templateValue = $Arguments[$i]
+            if ($templateValue -eq '{chat-template}') {
+                if (-not $ChatTemplatePath) { continue }
+                $templateValue = $ChatTemplatePath
+            } elseif (-not (Test-Path -LiteralPath $templateValue -PathType Leaf)) {
+                continue
+            }
+            $out.Add($a)
+            $out.Add($templateValue)
+            continue
+        }
 
         # --spec-type may contain both draft-mtp and draftless methods. Remove
         # only draft-dependent methods so ngram-mod remains active on fallback.
@@ -615,23 +677,23 @@ foreach ($name in $cfg.Keys) {
             $templatePath = Resolve-ConfiguredPath -RelativePath $entry.ChatTemplate
             if (Test-Path -LiteralPath $templatePath -PathType Leaf) {
                 $paths.ChatTemplate = $templatePath
-            } else {
-                $errors += "chat template not found: $($entry.ChatTemplate) under $modelsDirsLabel"
             }
         }
 
         $templateFlag = [Array]::IndexOf([object[]]@($entry.Args), '--chat-template-file')
         if ($templateFlag -ge 0) {
             if ($templateFlag + 1 -ge @($entry.Args).Count) {
-                $errors += '--chat-template-file has no path'
+                $warnings += '--chat-template-file has no path; omitting it'
             } else {
                 $templatePath = @($entry.Args)[$templateFlag + 1]
                 if ($templatePath -eq '{chat-template}') {
                     if (-not $paths.ContainsKey('ChatTemplate')) {
-                        $errors += '--chat-template-file has no resolvable ChatTemplate'
+                        if ($entry.Contains('ChatTemplate') -and $entry.ChatTemplate) {
+                            $warnings += "chat template not found: $($entry.ChatTemplate) under $modelsDirsLabel; omitting --chat-template-file"
+                        }
                     }
                 } elseif (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
-                    $errors += "chat template not found: $templatePath"
+                    $warnings += "chat template not found: $templatePath; omitting --chat-template-file"
                 }
             }
         }
@@ -660,6 +722,19 @@ foreach ($name in $cfg.Keys) {
         Errors = $errors
         Warnings = $warnings
         Paths = $paths
+    }
+}
+
+$unavailableModels = @($cfg.Keys | Where-Object { -not $configStatus[$_].Available })
+if ($unavailableModels.Count) {
+    Write-Host 'Unavailable models:' -ForegroundColor Yellow
+    foreach ($name in $unavailableModels) {
+        Write-Host ("  {0}" -f $name) -ForegroundColor Yellow
+        foreach ($reason in $configStatus[$name].Errors) {
+            foreach ($line in ($reason -split "`r?`n")) {
+                Write-Host ("    {0}" -f $line) -ForegroundColor DarkYellow
+            }
+        }
     }
 }
 

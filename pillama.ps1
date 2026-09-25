@@ -33,41 +33,17 @@ $common = @('--jinja', '--flash-attn', 'on',
             '--port', "$port")
 
 $cfg = [ordered]@{
-    'qwen3.8-27b_q4' = @{   # mtp 110k, no-mtp 183k
+    'qwen3.8-27b' = @{   # 108k
         Desc = '27b dense'
-        File = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
+        File = 'ThinkingCap-Qwen3.8-27B-Q6_K.gguf'
         ChatTemplate = 'chat_templates\chat_template_qwen.jinja'
         # EmbeddedMtp = $true
         # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
-        Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
-                 '--ubatch-size', '256',
-                 '--gpu-layers', '999',
-                 '--chat-template-file', '{chat-template}',
-                 '--reasoning-format', 'deepseek',   # needed for froggeric chat template
-                 '--spec-type', 'draft-mtp,ngram-mod', '--model-draft', '{draft}',
-                 '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
-                 '--spec-ngram-mod-n-match', '24',
-                 '--spec-ngram-mod-n-min', '48',
-                 '--spec-ngram-mod-n-max', '64',
-                # --- thinking mode ---
-                 '--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0.0',
-                 '--presence-penalty', '0.0', '--repeat-penalty', '1.0',
-                 '--reasoning-effort', 'medium',
-                # --- non-thinking mode ---
-                #  '--temp', '0.7', '--top-p', '0.80', '--top-k', '20', '--min-p', '0.0',
-                #  '--presence-penalty', '1.5', '--repeat-penalty', '1.0',
-                #  '--reasoning-effort', 'off',
-                 '--reasoning-preserve')
-    }
-    'qwen3.8-27b_q6' = @{   # 185k
-        Desc = '27b dense'
-        File = 'Qwen3.8-27B-UD-Q6_K.gguf'
-        ChatTemplate = 'chat_templates\chat_template_qwen.jinja'
-        # EmbeddedMtp = $true
-        # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
+        Mmproj = 'mmproj-ThinkingCap-Qwen3.8-27B-f16.gguf'
         Args = @('--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
                  '--ubatch-size', '256',
                  '--gpu-layers', '999',
+                 '--mmproj', '{mmproj}', '--no-mmproj-offload',
                  '--chat-template-file', '{chat-template}',
                  '--reasoning-format', 'deepseek',   # needed for froggeric chat template
                  '--spec-type', 'draft-mtp,ngram-mod',
@@ -77,7 +53,7 @@ $cfg = [ordered]@{
                 # --- thinking mode ---
                  '--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0.0',
                  '--presence-penalty', '0.0', '--repeat-penalty', '1.0',
-                 '--reasoning-effort', 'medium',
+                 '--reasoning-effort', 'xhigh',
                 # --- non-thinking mode ---
                 #  '--temp', '0.7', '--top-p', '0.80', '--top-k', '20', '--min-p', '0.0',
                 #  '--presence-penalty', '1.5', '--repeat-penalty', '1.0',

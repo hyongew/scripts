@@ -7,13 +7,13 @@ set by the environment variable PILLAMA_MODELS_DIR.
 
 Flag names are not case-sensitive.
   pillama                       show a model menu
-  pillama -silent               llama is served silently and stopped when pi exits
+  pillama -server               llama is served separately and is not stopped when pi exits
 
 Ctx sizes: [65536, 98304, 131072, 163840, 196608, 228376, 262144]
 #>
 [CmdletBinding()]
 param(
-    [switch]$Silent
+    [switch]$Server
 )
 
 $port = 8080
@@ -33,13 +33,13 @@ $common = @('--jinja', '--flash-attn', 'on',
             '--port', "$port")
 
 $cfg = [ordered]@{
-    'qwen3.8-27b' = @{   # 108k
+    'qwen3.8-27b' = @{   # 110k
         Desc = '27b dense'
-        File = 'ThinkingCap-Qwen3.8-27B-Q6_K.gguf'
+        File = 'Swift-1.5-Qwen3.8-27B-Q6_K_S.gguf'
         ChatTemplate = 'chat_templates\chat_template_qwen.jinja'
         # EmbeddedMtp = $true
         # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
-        Mmproj = 'mmproj-ThinkingCap-Qwen3.8-27B-f16.gguf'
+        Mmproj = 'mmproj-Swift-1.5-Qwen3.8-27B-F16.gguf'
         Args = @('--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
                  '--ubatch-size', '256',
                  '--gpu-layers', '999',
@@ -599,9 +599,16 @@ function Invoke-SearxngCompose {
     $composeArgs = if ($Action -eq 'up') { @('compose', 'up', '-d') } else { @('compose', 'down') }
     Push-Location -LiteralPath $searxngDir
     try {
+        # Under $ErrorActionPreference = 'Stop', PowerShell 5.1 turns the first
+        # stderr line of a 2>&1-redirected native command into a terminating
+        # error. docker compose writes its progress to stderr, so lower the
+        # preference for this call only.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         $output = @(& $docker.Source @composeArgs 2>&1)
         $exitCode = $LASTEXITCODE
     } finally {
+        $ErrorActionPreference = $prevEap
         Pop-Location
     }
     if ($exitCode -ne 0) {
@@ -857,12 +864,12 @@ function Wait-ServerReady {
     $start = Get-Date
     $deadline = $start.AddSeconds($TimeoutSec)
     $ready = $false
-    $detailHint = if ($Silent) { '; retry without -silent for details' } else { '; see the llama console for details' }
+    $detailHint = if (-not $Server) { '; retry with -server for details' } else { '; see the llama console for details' }
 
     # The countdown repaints one line in place, which needs a real console: a
     # redirected host has no cursor to rewind, so it would scroll a line per second.
     $live = -not ([Console]::IsOutputRedirected -or [Console]::IsInputRedirected)
-    if ($Silent -and -not $live) {
+    if (-not $Server -and -not $live) {
         Write-Host 'Waiting for server health...'
     } else {
         Write-Host 'Waiting for server health; detailed startup output is in the llama window.'
@@ -1024,10 +1031,10 @@ if ($loaded -and ($loaded -eq $modelId -or $loaded -like "*$modelId*")) {
 
     $commandLine = ConvertTo-CommandLine -Arguments $serveArgs
     Write-Host "Starting: llama $commandLine" -ForegroundColor Cyan
-    if ($Silent) {
-        $proc = Start-Process 'llama' -ArgumentList $commandLine -WindowStyle Hidden -PassThru
-    } else {
+    if ($Server) {
         $proc = Start-Process 'llama' -ArgumentList $commandLine -PassThru
+    } else {
+        $proc = Start-Process 'llama' -ArgumentList $commandLine -WindowStyle Hidden -PassThru
     }
     $startedByUs = $true
     $searxngStartedByUs = Start-Searxng
@@ -1062,7 +1069,7 @@ try {
     # provider/model comes from ~\.pi\agent\models.json
     pi --model "llamacpp/$modelId"
 } finally {
-    if ($startedByUs -and $Silent) {
+    if ($startedByUs -and -not $Server) {
         if ($proc -and -not $proc.HasExited) {
             Write-Host 'Stopping llama server.' -ForegroundColor Cyan
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue

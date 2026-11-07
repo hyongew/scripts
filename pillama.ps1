@@ -30,7 +30,8 @@ $ErrorActionPreference = 'Stop'
 $common = @('--jinja', '--flash-attn', 'on',
             '--log-verbosity', '4',
             '--cache-ram', '2048',
-            '--port', "$port")
+            '--port', "$port",
+            '--parallel', '2')
 
 $cfg = [ordered]@{
     'qwen3.8-27b' = @{   # 110k
@@ -990,7 +991,7 @@ if ($loaded -and ($loaded -eq $modelId -or $loaded -like "*$modelId*")) {
 }
 
 try {
-    Show-ServerContext -Arguments $modelArgs
+    Show-ServerContext -Arguments ($common + $modelArgs)
     $contextWindow = Get-ServerContextWindow
     if (-not $contextWindow) {
         $ctxIndex = [Array]::IndexOf([object[]]@($modelArgs), '--ctx-size')

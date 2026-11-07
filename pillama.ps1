@@ -35,9 +35,9 @@ $common = @('--jinja', '--flash-attn', 'on',
 $cfg = [ordered]@{
     'qwen3.8-27b' = @{   # 110k
         Desc = '27b dense'
-        File = 'Swift-1.5-Qwen3.8-27B-Q6_K_S.gguf'
+        File = 'Swift-1.5-Qwen3.8-27B-Q5_K_S.gguf'
         ChatTemplate = 'chat_templates\chat_template_qwen.jinja'
-        # EmbeddedMtp = $true
+        EmbeddedMtp = $true
         # Draft = 'mtp-Qwen3.8-27B-Q4_0.gguf'
         Mmproj = 'mmproj-Swift-1.5-Qwen3.8-27B-F16.gguf'
         Args = @('--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
@@ -89,9 +89,9 @@ $cfg = [ordered]@{
                 #  '--spec-draft-type-k', 'q4_0', '--spec-draft-type-v', 'q4_0',
                  '--temp', '1.0', '--top-p', '0.95', '--top-k', '64')
     }
-    'lfm2.5-2.6b' = @{
-        Desc = '2.6b dense'
-        File = 'LFM2.5-2.6B-Q8_0.gguf'
+    'lfm3-1.7b' = @{
+        Desc = '1.7b dense'
+        File = 'LFM3-1.7B-Q8_0.gguf'
         Args = @('--cache-type-k', 'f16', '--cache-type-v', 'f16',
                  '--gpu-layers', '999',
                  '--mmproj', '{mmproj}', '--no-mmproj-offload',
@@ -586,59 +586,6 @@ function Update-PiModelConfig {
     Write-Host "Updated pi model configuration: llamacpp/$ModelId" -ForegroundColor DarkGray
 }
 
-function Invoke-SearxngCompose {
-    param([Parameter(Mandatory)][ValidateSet('up', 'down')][string]$Action)
-
-    $docker = Get-Command 'docker' -ErrorAction SilentlyContinue
-    if (-not $docker) { throw 'docker command not found' }
-    $searxngDir = Join-Path $env:USERPROFILE 'dev\searxng'
-    if (-not (Test-Path -LiteralPath (Join-Path $searxngDir 'docker-compose.yml') -PathType Leaf)) {
-        throw "SearXNG compose file not found: $searxngDir"
-    }
-
-    $composeArgs = if ($Action -eq 'up') { @('compose', 'up', '-d') } else { @('compose', 'down') }
-    Push-Location -LiteralPath $searxngDir
-    try {
-        # Under $ErrorActionPreference = 'Stop', PowerShell 5.1 turns the first
-        # stderr line of a 2>&1-redirected native command into a terminating
-        # error. docker compose writes its progress to stderr, so lower the
-        # preference for this call only.
-        $prevEap = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        $output = @(& $docker.Source @composeArgs 2>&1)
-        $exitCode = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $prevEap
-        Pop-Location
-    }
-    if ($exitCode -ne 0) {
-        $detail = if ($output) { ": $($output -join "`n")" } else { '' }
-        throw "docker compose $Action failed$detail"
-    }
-}
-
-function Start-Searxng {
-    Write-Host 'Starting SearXNG web search...' -ForegroundColor Cyan
-    try {
-        Invoke-SearxngCompose -Action up
-        Write-Host 'SearXNG web search is running.' -ForegroundColor DarkGray
-        return $true
-    } catch {
-        Write-Warning "SearXNG could not be started: $($_.Exception.Message)"
-        try { Invoke-SearxngCompose -Action down } catch { }
-        return $false
-    }
-}
-
-function Stop-Searxng {
-    Write-Host 'Stopping SearXNG web search.' -ForegroundColor Cyan
-    try {
-        Invoke-SearxngCompose -Action down
-    } catch {
-        Write-Warning "SearXNG could not be stopped: $($_.Exception.Message)"
-    }
-}
-
 # Validate every menu entry up front. Missing experimental models are retained
 # in the menu but cannot be selected; valid entries remain usable.
 $configStatus = [ordered]@{}
@@ -964,7 +911,6 @@ $proc = $null
 $startedByUs = $false
 $serverOwnerPid = $null
 $startupLogPath = $null
-$searxngStartedByUs = $false
 $loaded = Get-LoadedModel
 $portOwner = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
               Select-Object -First 1).OwningProcess
@@ -973,7 +919,6 @@ if ($loaded -and ($loaded -eq $modelId -or $loaded -like "*$modelId*")) {
     if (-not $alreadyRunningServer) {
         Write-Host "Reusing already-running server ($loaded on port $port)" -ForegroundColor Green
     }
-    $searxngStartedByUs = Start-Searxng
 } else {
     if ($portOwner) {
         $what = if ($loaded) { "a different model ($loaded)" } else { 'an unknown process' }
@@ -1037,20 +982,11 @@ if ($loaded -and ($loaded -eq $modelId -or $loaded -like "*$modelId*")) {
         $proc = Start-Process 'llama' -ArgumentList $commandLine -WindowStyle Hidden -PassThru
     }
     $startedByUs = $true
-    $searxngStartedByUs = Start-Searxng
 
-    try {
-        Wait-ServerReady -Proc $proc -TimeoutSec $startupTimeoutSec -Label $modelId
-        $serverOwnerPid = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-                           Select-Object -First 1).OwningProcess
-        Show-StartupMemorySummary -LogPath $startupLogPath -FitTarget $fitTargetApplied -KeepFreeGib $ramThreshold
-    } catch {
-        if ($searxngStartedByUs) {
-            Stop-Searxng
-            $searxngStartedByUs = $false
-        }
-        throw
-    }
+    Wait-ServerReady -Proc $proc -TimeoutSec $startupTimeoutSec -Label $modelId
+    $serverOwnerPid = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+                       Select-Object -First 1).OwningProcess
+    Show-StartupMemorySummary -LogPath $startupLogPath -FitTarget $fitTargetApplied -KeepFreeGib $ramThreshold
 }
 
 try {
@@ -1085,10 +1021,6 @@ try {
         }
     } elseif (-not $alreadyRunningServer) {
         Write-Host "Server left running on port $port (stop it with: Get-Process llama | Stop-Process)"
-    }
-    if ($searxngStartedByUs) {
-        Stop-Searxng
-        $searxngStartedByUs = $false
     }
     if ($startupLogPath -and (Test-Path -LiteralPath $startupLogPath)) {
         Remove-Item -LiteralPath $startupLogPath -Force -ErrorAction SilentlyContinue
